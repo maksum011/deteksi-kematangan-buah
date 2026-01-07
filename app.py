@@ -12,49 +12,77 @@ st.set_page_config(
 )
 
 # =========================
-# CSS KUSTOM (RINGAN)
+# CSS MEWAH & PROFESIONAL
 # =========================
 st.markdown("""
 <style>
+/* Background utama */
 body {
-    background-color: #fafafa;
+    background: linear-gradient(135deg, #f4f6f8, #ffffff);
+    font-family: 'Segoe UI', sans-serif;
 }
 
+/* Container utama */
 .main {
-    padding: 2rem;
+    padding: 2.5rem;
 }
 
+/* Judul */
 h1 {
-    color: #2c3e50;
-    font-weight: 700;
+    color: #1f2937;
+    font-weight: 800;
+    letter-spacing: 1px;
 }
 
-.uploadedFile {
-    border: 2px dashed #e74c3c;
+/* Subjudul */
+.subtitle {
+    color: #6b7280;
+    font-size: 15px;
+    margin-top: -10px;
+}
+
+/* Card efek mewah */
+.card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+    margin-top: 20px;
+}
+
+/* Progress bar */
+.stProgress > div > div > div > div {
+    background: linear-gradient(90deg, #dc2626, #f97316);
     border-radius: 10px;
 }
 
-.stProgress > div > div > div > div {
-    background-color: #e74c3c;
+/* Metric */
+[data-testid="metric-container"] {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
 }
 
-[data-testid="metric-container"] {
-    background-color: #ffffff;
-    border-radius: 12px;
-    padding: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+/* Upload box */
+section[data-testid="stFileUploader"] {
+    border: 2px dashed #d1d5db;
+    padding: 15px;
+    border-radius: 14px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# JUDUL
+# HEADER
 # =========================
 st.markdown(
-    "<h1 style='text-align:center;'>🍅 Deteksi Kematangan Buah</h1>"
-    "<p style='text-align:center; color:#7f8c8d;'>"
-    "Analisis warna berbasis HSV tanpa OpenCV"
-    "</p>",
+    """
+    <h1 style="text-align:center;">🍅 Deteksi Kematangan Buah</h1>
+    <p class="subtitle" style="text-align:center;">
+    Analisis warna berbasis HSV dengan skor kematangan berbobot
+    </p>
+    """,
     unsafe_allow_html=True
 )
 
@@ -63,7 +91,7 @@ uploaded_file = st.file_uploader(
 )
 
 # =========================
-# MODEL DETEKSI (HSV SCORE)
+# MODEL DETEKSI HSV
 # =========================
 def deteksi_kematangan_hsv(img):
     img = img.convert("RGB")
@@ -89,12 +117,10 @@ def deteksi_kematangan_hsv(img):
     saturation = delta / (cmax + 1e-6)
     value = cmax
 
-    # Rata-rata global
     h_mean = np.mean(hue)
     s_mean = np.mean(saturation)
     v_mean = np.mean(value)
 
-    # Skor kematangan berbobot
     ripeness_score = (
         (1 - abs(h_mean - 0) / 180) * 0.5 +
         s_mean * 0.3 +
@@ -108,31 +134,31 @@ def deteksi_kematangan_hsv(img):
     else:
         status = "Matang 🔴"
 
-    return status, ripeness_score, {
-        "Hue Rata-rata": h_mean,
-        "Saturasi Rata-rata": s_mean,
-        "Kecerahan Rata-rata": v_mean
-    }
+    return status, ripeness_score, h_mean, s_mean, v_mean
 
 # =========================
-# OUTPUT APLIKASI
+# OUTPUT
 # =========================
 if uploaded_file:
     img = Image.open(uploaded_file)
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.image(img, caption="Gambar Buah", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    status, tingkat, fitur = deteksi_kematangan_hsv(img)
+    status, score, h, s, v = deteksi_kematangan_hsv(img)
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader(status)
-    st.progress(float(min(tingkat, 1.0)))
+    st.progress(float(min(score, 1.0)))
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Hue", f"{fitur['Hue Rata-rata']:.1f}")
-    c2.metric("Saturasi", f"{fitur['Saturasi Rata-rata']:.2f}")
-    c3.metric("Kecerahan", f"{fitur['Kecerahan Rata-rata']:.2f}")
+    c1.metric("Hue Rata-rata", f"{h:.1f}")
+    c2.metric("Saturasi", f"{s:.2f}")
+    c3.metric("Kecerahan", f"{v:.2f}")
 
     st.caption(
-        "Deteksi kematangan buah menggunakan pendekatan "
-        "rata-rata HSV dan skor kematangan berbobot."
+        "Pendekatan ini menilai kematangan buah berdasarkan "
+        "karakteristik warna global menggunakan ruang warna HSV."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
