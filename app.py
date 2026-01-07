@@ -12,12 +12,12 @@ st.set_page_config(
 )
 
 # =========================
-# CSS ELEGAN
+# CSS (BERSIH & PROFESIONAL)
 # =========================
 st.markdown("""
 <style>
 body {
-    background: linear-gradient(135deg, #f9fafb, #ffffff);
+    background: linear-gradient(135deg, #f8fafc, #ffffff);
     font-family: 'Segoe UI', sans-serif;
 }
 h1 {
@@ -39,6 +39,9 @@ h1 {
     border-radius: 12px;
     box-shadow: 0 6px 15px rgba(0,0,0,0.06);
 }
+.stProgress > div > div > div > div {
+    background: linear-gradient(90deg, #dc2626, #f97316);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -48,7 +51,7 @@ h1 {
 st.markdown("""
 <h1 style="text-align:center;">🍎 Analisis Kematangan Buah</h1>
 <p class="subtitle" style="text-align:center;">
-Pendekatan distribusi warna HSV multi-kategori
+Deteksi kematangan berbasis distribusi warna HSV (tanpa OpenCV)
 </p>
 """, unsafe_allow_html=True)
 
@@ -84,7 +87,7 @@ def rgb_to_hsv(img):
     return hue, sat, val
 
 # =========================
-# MODEL DETEKSI MULTI WARNA
+# MODEL DETEKSI FINAL
 # =========================
 def deteksi_kematangan(img):
     img = img.convert("RGB")
@@ -92,7 +95,19 @@ def deteksi_kematangan(img):
 
     hue, sat, val = rgb_to_hsv(data)
 
-    total = hue.size
+    # ---------------------------------
+    # MASK: HANYA KULIT BUAH
+    # Buang putih, abu-abu, background
+    # ---------------------------------
+    mask = (sat > 0.25) & (val < 0.95)
+
+    hue = hue[mask]
+    val = val[mask]
+
+    if len(hue) == 0:
+        return "Tidak Terdeteksi", {}
+
+    total = len(hue)
 
     warna = {
         "Hijau": np.sum((hue >= 60) & (hue < 140)),
@@ -105,10 +120,14 @@ def deteksi_kematangan(img):
     for k in warna:
         warna[k] /= total
 
-    # LOGIKA KEPUTUSAN (OBYEKTIF)
-    if warna["Hijau"] > 0.45:
+    # ---------------------------------
+    # KEPUTUSAN BERBASIS DOMINASI WARNA
+    # ---------------------------------
+    dominan = max(warna, key=warna.get)
+
+    if dominan == "Hijau":
         status = "Masih Mentah 🟢"
-    elif warna["Merah"] + warna["Oranye"] > 0.55:
+    elif dominan in ["Merah", "Oranye"]:
         status = "Matang 🔴"
     else:
         status = "Setengah Matang 🟡"
@@ -116,7 +135,7 @@ def deteksi_kematangan(img):
     return status, warna
 
 # =========================
-# OUTPUT
+# OUTPUT APLIKASI
 # =========================
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -135,7 +154,7 @@ if uploaded_file:
         col.metric(k, f"{v*100:.1f}%")
 
     st.caption(
-        "Prediksi kematangan berdasarkan distribusi warna HSV "
-        "dengan banyak kategori warna dominan."
+        "Prediksi ditentukan dari warna dominan pada kulit buah "
+        "menggunakan distribusi HSV dengan penyaringan background."
     )
     st.markdown('</div>', unsafe_allow_html=True)
