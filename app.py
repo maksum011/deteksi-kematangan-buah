@@ -7,7 +7,6 @@ from PIL import Image
 # =========================
 st.set_page_config(
     page_title="Analisis Kematangan Buah Tomat",
-    page_icon="🍎",
     layout="centered"
 )
 
@@ -49,7 +48,7 @@ h1 {
 # HEADER
 # =========================
 st.markdown("""
-<h1 style="text-align:center;">🍎 Analisis Kematangan Buah Tomat</h1>
+<h1 style="text-align:center;">Analisis Kematangan Buah Tomat</h1>
 <p class="subtitle" style="text-align:center;">
 Deteksi kematangan berbasis distribusi warna HSV (tanpa OpenCV)
 </p>
@@ -158,4 +157,5 @@ if uploaded_file:
         "menggunakan distribusi HSV dengan penyaringan background."
     )
     st.markdown('</div>', unsafe_allow_html=True)
+
 
