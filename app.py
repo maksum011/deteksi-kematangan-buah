@@ -6,18 +6,60 @@ from PIL import Image
 # KONFIGURASI HALAMAN
 # =========================
 st.set_page_config(
-    page_title="Fruit Ripeness Detection",
+    page_title="Deteksi Kematangan Buah",
     page_icon="🍅",
     layout="centered"
 )
 
+# =========================
+# CSS KUSTOM (RINGAN)
+# =========================
+st.markdown("""
+<style>
+body {
+    background-color: #fafafa;
+}
+
+.main {
+    padding: 2rem;
+}
+
+h1 {
+    color: #2c3e50;
+    font-weight: 700;
+}
+
+.uploadedFile {
+    border: 2px dashed #e74c3c;
+    border-radius: 10px;
+}
+
+.stProgress > div > div > div > div {
+    background-color: #e74c3c;
+}
+
+[data-testid="metric-container"] {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# JUDUL
+# =========================
 st.markdown(
-    "<h1 style='text-align:center;'>🍅 Fruit Ripeness Detection</h1>",
+    "<h1 style='text-align:center;'>🍅 Deteksi Kematangan Buah</h1>"
+    "<p style='text-align:center; color:#7f8c8d;'>"
+    "Analisis warna berbasis HSV tanpa OpenCV"
+    "</p>",
     unsafe_allow_html=True
 )
 
 uploaded_file = st.file_uploader(
-    "Upload gambar buah", type=["jpg", "jpeg", "png"]
+    "Unggah gambar buah", type=["jpg", "jpeg", "png"]
 )
 
 # =========================
@@ -54,9 +96,9 @@ def deteksi_kematangan_hsv(img):
 
     # Skor kematangan berbobot
     ripeness_score = (
-        (1 - abs(h_mean - 0) / 180) * 0.5 +  # kedekatan ke merah
-        s_mean * 0.3 +                      # intensitas warna
-        v_mean * 0.2                       # kecerahan
+        (1 - abs(h_mean - 0) / 180) * 0.5 +
+        s_mean * 0.3 +
+        v_mean * 0.2
     )
 
     if ripeness_score < 0.35:
@@ -67,9 +109,9 @@ def deteksi_kematangan_hsv(img):
         status = "Matang 🔴"
 
     return status, ripeness_score, {
-        "Hue Avg": h_mean,
-        "Saturation Avg": s_mean,
-        "Brightness Avg": v_mean
+        "Hue Rata-rata": h_mean,
+        "Saturasi Rata-rata": s_mean,
+        "Kecerahan Rata-rata": v_mean
     }
 
 # =========================
@@ -86,11 +128,11 @@ if uploaded_file:
     st.progress(float(min(tingkat, 1.0)))
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Hue Avg", f"{fitur['Hue Avg']:.1f}")
-    c2.metric("Saturation", f"{fitur['Saturation Avg']:.2f}")
-    c3.metric("Brightness", f"{fitur['Brightness Avg']:.2f}")
+    c1.metric("Hue", f"{fitur['Hue Rata-rata']:.1f}")
+    c2.metric("Saturasi", f"{fitur['Saturasi Rata-rata']:.2f}")
+    c3.metric("Kecerahan", f"{fitur['Kecerahan Rata-rata']:.2f}")
 
     st.caption(
-        "Deteksi kematangan menggunakan pendekatan rata-rata HSV "
-        "dan skor kematangan berbobot (tanpa OpenCV)."
+        "Deteksi kematangan buah menggunakan pendekatan "
+        "rata-rata HSV dan skor kematangan berbobot."
     )
