@@ -1,13 +1,12 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
-from sklearn.cluster import KMeans
 
 # =========================
 # KONFIGURASI HALAMAN
 # =========================
 st.set_page_config(
-    page_title="Analisis Kematangan Buah Berbasis Warna",
+    page_title="Analisis Kematangan Buah",
     page_icon="🍎",
     layout="centered"
 )
@@ -49,7 +48,7 @@ h1 {
 st.markdown("""
 <h1 style="text-align:center;">🍎 Analisis Kematangan Buah</h1>
 <p class="subtitle" style="text-align:center;">
-Pendekatan clustering warna LAB dan proporsi warna dominan
+Pendekatan distribusi warna HSV multi-kategori
 </p>
 """, unsafe_allow_html=True)
 
@@ -58,73 +57,58 @@ uploaded_file = st.file_uploader(
 )
 
 # =========================
-# UTIL RGB -> LAB (manual)
+# RGB → HSV (NUMPY)
 # =========================
-def rgb_to_lab(rgb):
-    rgb = rgb / 255.0
-    mask = rgb > 0.04045
-    rgb[mask] = ((rgb[mask] + 0.055) / 1.055) ** 2.4
-    rgb[~mask] = rgb[~mask] / 12.92
-    rgb *= 100
+def rgb_to_hsv(img):
+    img = img / 255.0
+    r, g, b = img[:,:,0], img[:,:,1], img[:,:,2]
 
-    X = rgb[:,0] * 0.4124 + rgb[:,1] * 0.3576 + rgb[:,2] * 0.1805
-    Y = rgb[:,0] * 0.2126 + rgb[:,1] * 0.7152 + rgb[:,2] * 0.0722
-    Z = rgb[:,0] * 0.0193 + rgb[:,1] * 0.1192 + rgb[:,2] * 0.9505
+    cmax = np.max(img, axis=2)
+    cmin = np.min(img, axis=2)
+    delta = cmax - cmin + 1e-6
 
-    X /= 95.047
-    Y /= 100.000
-    Z /= 108.883
+    hue = np.zeros_like(cmax)
 
-    f = lambda t: np.where(t > 0.008856, t ** (1/3), (7.787 * t) + (16/116))
-    fx, fy, fz = f(X), f(Y), f(Z)
+    mask = cmax == r
+    hue[mask] = (60 * ((g - b) / delta) % 360)[mask]
 
-    L = (116 * fy) - 16
-    a = 500 * (fx - fy)
-    b = 200 * (fy - fz)
+    mask = cmax == g
+    hue[mask] = (60 * ((b - r) / delta + 2))[mask]
 
-    return np.stack([L, a, b], axis=1)
+    mask = cmax == b
+    hue[mask] = (60 * ((r - g) / delta + 4))[mask]
+
+    sat = delta / (cmax + 1e-6)
+    val = cmax
+
+    return hue, sat, val
 
 # =========================
-# MODEL DETEKSI
+# MODEL DETEKSI MULTI WARNA
 # =========================
 def deteksi_kematangan(img):
     img = img.convert("RGB")
-    data = np.array(img)
-    pixels = data.reshape(-1, 3)
+    data = np.array(img).astype(float)
 
-    lab = rgb_to_lab(pixels)
+    hue, sat, val = rgb_to_hsv(data)
 
-    kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
-    labels = kmeans.fit_predict(lab)
-    centers = kmeans.cluster_centers_
-
-    counts = np.bincount(labels)
-    proportions = counts / counts.sum()
+    total = hue.size
 
     warna = {
-        "Hijau": 0,
-        "Kuning": 0,
-        "Oranye": 0,
-        "Merah": 0,
-        "Coklat": 0
+        "Hijau": np.sum((hue >= 60) & (hue < 140)),
+        "Kuning": np.sum((hue >= 40) & (hue < 60)),
+        "Oranye": np.sum((hue >= 20) & (hue < 40)),
+        "Merah": np.sum((hue < 20) | (hue >= 340)),
+        "Coklat/Gelap": np.sum(val < 0.3)
     }
 
-    for i, center in enumerate(centers):
-        L, a, b = center
-        if a < -10:
-            warna["Hijau"] += proportions[i]
-        elif b > 30 and a < 20:
-            warna["Kuning"] += proportions[i]
-        elif a > 20 and b > 20:
-            warna["Oranye"] += proportions[i]
-        elif a > 35:
-            warna["Merah"] += proportions[i]
-        else:
-            warna["Coklat"] += proportions[i]
+    for k in warna:
+        warna[k] /= total
 
-    if warna["Hijau"] > 0.5:
+    # LOGIKA KEPUTUSAN (OBYEKTIF)
+    if warna["Hijau"] > 0.45:
         status = "Masih Mentah 🟢"
-    elif warna["Merah"] + warna["Oranye"] > 0.6:
+    elif warna["Merah"] + warna["Oranye"] > 0.55:
         status = "Matang 🔴"
     else:
         status = "Setengah Matang 🟡"
@@ -151,7 +135,7 @@ if uploaded_file:
         col.metric(k, f"{v*100:.1f}%")
 
     st.caption(
-        "Prediksi didasarkan pada komposisi warna dominan "
-        "hasil clustering LAB (tanpa OpenCV)."
+        "Prediksi kematangan berdasarkan distribusi warna HSV "
+        "dengan banyak kategori warna dominan."
     )
     st.markdown('</div>', unsafe_allow_html=True)
