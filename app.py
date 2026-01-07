@@ -1,74 +1,44 @@
 import streamlit as st
 import numpy as np
 from PIL import Image
+from sklearn.cluster import KMeans
 
 # =========================
 # KONFIGURASI HALAMAN
 # =========================
 st.set_page_config(
-    page_title="Deteksi Kematangan Buah",
-    page_icon="🍅",
+    page_title="Analisis Kematangan Buah Berbasis Warna",
+    page_icon="🍎",
     layout="centered"
 )
 
 # =========================
-# CSS MEWAH & PROFESIONAL
+# CSS ELEGAN
 # =========================
 st.markdown("""
 <style>
-/* Background utama */
 body {
-    background: linear-gradient(135deg, #f4f6f8, #ffffff);
+    background: linear-gradient(135deg, #f9fafb, #ffffff);
     font-family: 'Segoe UI', sans-serif;
 }
-
-/* Container utama */
-.main {
-    padding: 2.5rem;
-}
-
-/* Judul */
 h1 {
-    color: #1f2937;
     font-weight: 800;
-    letter-spacing: 1px;
+    color: #111827;
 }
-
-/* Subjudul */
 .subtitle {
     color: #6b7280;
-    font-size: 15px;
-    margin-top: -10px;
+    font-size: 14px;
 }
-
-/* Card efek mewah */
 .card {
-    background: #ffffff;
+    background: white;
     border-radius: 16px;
     padding: 20px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
     margin-top: 20px;
 }
-
-/* Progress bar */
-.stProgress > div > div > div > div {
-    background: linear-gradient(90deg, #dc2626, #f97316);
-    border-radius: 10px;
-}
-
-/* Metric */
 [data-testid="metric-container"] {
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 15px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-}
-
-/* Upload box */
-section[data-testid="stFileUploader"] {
-    border: 2px dashed #d1d5db;
-    padding: 15px;
-    border-radius: 14px;
+    border-radius: 12px;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.06);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -76,65 +46,90 @@ section[data-testid="stFileUploader"] {
 # =========================
 # HEADER
 # =========================
-st.markdown(
-    """
-    <h1 style="text-align:center;">🍅 Deteksi Kematangan Buah</h1>
-    <p class="subtitle" style="text-align:center;">
-    Analisis warna berbasis HSV dengan skor kematangan berbobot
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<h1 style="text-align:center;">🍎 Analisis Kematangan Buah</h1>
+<p class="subtitle" style="text-align:center;">
+Pendekatan clustering warna LAB dan proporsi warna dominan
+</p>
+""", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
     "Unggah gambar buah", type=["jpg", "jpeg", "png"]
 )
 
 # =========================
-# MODEL DETEKSI HSV
+# UTIL RGB -> LAB (manual)
 # =========================
-def deteksi_kematangan_hsv(img):
+def rgb_to_lab(rgb):
+    rgb = rgb / 255.0
+    mask = rgb > 0.04045
+    rgb[mask] = ((rgb[mask] + 0.055) / 1.055) ** 2.4
+    rgb[~mask] = rgb[~mask] / 12.92
+    rgb *= 100
+
+    X = rgb[:,0] * 0.4124 + rgb[:,1] * 0.3576 + rgb[:,2] * 0.1805
+    Y = rgb[:,0] * 0.2126 + rgb[:,1] * 0.7152 + rgb[:,2] * 0.0722
+    Z = rgb[:,0] * 0.0193 + rgb[:,1] * 0.1192 + rgb[:,2] * 0.9505
+
+    X /= 95.047
+    Y /= 100.000
+    Z /= 108.883
+
+    f = lambda t: np.where(t > 0.008856, t ** (1/3), (7.787 * t) + (16/116))
+    fx, fy, fz = f(X), f(Y), f(Z)
+
+    L = (116 * fy) - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
+
+    return np.stack([L, a, b], axis=1)
+
+# =========================
+# MODEL DETEKSI
+# =========================
+def deteksi_kematangan(img):
     img = img.convert("RGB")
-    data = np.array(img).astype(float) / 255.0
+    data = np.array(img)
+    pixels = data.reshape(-1, 3)
 
-    r, g, b = data[:,:,0], data[:,:,1], data[:,:,2]
+    lab = rgb_to_lab(pixels)
 
-    cmax = np.max(data, axis=2)
-    cmin = np.min(data, axis=2)
-    delta = cmax - cmin + 1e-6
+    kmeans = KMeans(n_clusters=5, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(lab)
+    centers = kmeans.cluster_centers_
 
-    hue = np.zeros_like(cmax)
+    counts = np.bincount(labels)
+    proportions = counts / counts.sum()
 
-    mask = cmax == r
-    hue[mask] = (60 * ((g - b) / delta) % 360)[mask]
+    warna = {
+        "Hijau": 0,
+        "Kuning": 0,
+        "Oranye": 0,
+        "Merah": 0,
+        "Coklat": 0
+    }
 
-    mask = cmax == g
-    hue[mask] = (60 * ((b - r) / delta + 2))[mask]
+    for i, center in enumerate(centers):
+        L, a, b = center
+        if a < -10:
+            warna["Hijau"] += proportions[i]
+        elif b > 30 and a < 20:
+            warna["Kuning"] += proportions[i]
+        elif a > 20 and b > 20:
+            warna["Oranye"] += proportions[i]
+        elif a > 35:
+            warna["Merah"] += proportions[i]
+        else:
+            warna["Coklat"] += proportions[i]
 
-    mask = cmax == b
-    hue[mask] = (60 * ((r - g) / delta + 4))[mask]
-
-    saturation = delta / (cmax + 1e-6)
-    value = cmax
-
-    h_mean = np.mean(hue)
-    s_mean = np.mean(saturation)
-    v_mean = np.mean(value)
-
-    ripeness_score = (
-        (1 - abs(h_mean - 0) / 180) * 0.5 +
-        s_mean * 0.3 +
-        v_mean * 0.2
-    )
-
-    if ripeness_score < 0.35:
+    if warna["Hijau"] > 0.5:
         status = "Masih Mentah 🟢"
-    elif ripeness_score < 0.6:
-        status = "Setengah Matang 🟡"
-    else:
+    elif warna["Merah"] + warna["Oranye"] > 0.6:
         status = "Matang 🔴"
+    else:
+        status = "Setengah Matang 🟡"
 
-    return status, ripeness_score, h_mean, s_mean, v_mean
+    return status, warna
 
 # =========================
 # OUTPUT
@@ -146,19 +141,17 @@ if uploaded_file:
     st.image(img, caption="Gambar Buah", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    status, score, h, s, v = deteksi_kematangan_hsv(img)
+    status, warna = deteksi_kematangan(img)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader(status)
-    st.progress(float(min(score, 1.0)))
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Hue Rata-rata", f"{h:.1f}")
-    c2.metric("Saturasi", f"{s:.2f}")
-    c3.metric("Kecerahan", f"{v:.2f}")
+    cols = st.columns(len(warna))
+    for col, (k, v) in zip(cols, warna.items()):
+        col.metric(k, f"{v*100:.1f}%")
 
     st.caption(
-        "Pendekatan ini menilai kematangan buah berdasarkan "
-        "karakteristik warna global menggunakan ruang warna HSV."
+        "Prediksi didasarkan pada komposisi warna dominan "
+        "hasil clustering LAB (tanpa OpenCV)."
     )
     st.markdown('</div>', unsafe_allow_html=True)
